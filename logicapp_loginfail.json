@@ -1,0 +1,81 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "logicAppName": { "type": "string" }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2016-06-01",
+      "name": "[parameters('logicAppName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+              "$connections": {
+                "defaultValue": {},
+                "type": "Object"
+              }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "referenceName": "azuresentinel"
+                  }
+                },
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "SendEmail_LoginFail": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['smtp']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/SendEmailV3",
+                "body": {
+                  "from": "jys613kr@gmail.com",
+                  "to": "jys613kr@gmail.com",
+                  "subject": "[보안경고] 로그인 실패 시도 감지",
+                  "body": "로그인 실패 시도가 5회 이상 감지되었습니다.<br><br>경고 시간: <strong>@{triggerBody()?['object']?['properties']?['createdTimeUtc']}</strong><br><br>Incident 이름: @{triggerBody()?['object']?['properties']?['title']}<br><br>심각도: @{triggerBody()?['object']?['properties']?['severity']}",
+                  "isHtml": true
+                }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "smtp": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', 'smtp-con')]",
+                "connectionName": "smtp",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/smtp')]"
+              },
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', 'azuresentinel-con')]",
+                "connectionName": "azuresentinel",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

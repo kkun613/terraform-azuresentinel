@@ -1,0 +1,8 @@
+---
+# vars file for apache
+package: httpd
+webport: 80/tcp
+db_name: "wordpress"
+username: "root"
+password: "It12345!"
+localhost: "192.168.126.11"

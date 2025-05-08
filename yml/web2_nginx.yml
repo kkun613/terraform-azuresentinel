@@ -1,0 +1,6 @@
+---
+- name: install nginx and wordpress on web2
+  hosts: web2
+  become: true
+  roles:
+    - nginx

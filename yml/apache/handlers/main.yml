@@ -1,0 +1,8 @@
+---
+# handlers file for apache
+- name: "start {{ package }}"
+  systemd:
+    name: "{{ package }}"
+    state: started
+    enabled: yes
+

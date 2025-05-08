@@ -1,0 +1,41 @@
+---
+- name: Set ansible.cfg
+  hosts: localhost
+  gather_facts: false
+  ignore_errors: true
+  become: true
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+  tasks:
+  - name: download ansible.cfg
+    get_url:
+      url: https://raw.githubusercontent.com/ansible/ansible/refs/heads/stable-2.9/examples/ansible.cfg
+      dest: /etc/ansible/ansible.cfg
+      mode: '0644'
+      owner: root
+      group: root
+
+  - name: set ansible.cfg
+    replace:
+      path: /etc/ansible/ansible.cfg
+      regexp: "{{ item.from }}"
+      replace: "{{ item.to }}"
+    loop:
+      - { from: '#host_key_checking = False', to: 'host_key_checking = False' }
+      - { from: '#inventory      = /etc/ansible/hosts', to: 'inventory      = /etc/ansible/hosts' }
+
+  - name: set hosts
+    blockinfile:
+      path: /etc/ansible/hosts
+      marker: ""
+      block: |
+        [all]
+        10.0.3.4 ansible_user=ysjang ansible_ssh_private_key_file=/home/ysjang/.ssh/id_rsa
+        10.0.4.4 ansible_user=ysjang ansible_ssh_private_key_file=/home/ysjang/.ssh/id_rsa
+        10.0.6.4 ansible_user=ysjang ansible_ssh_private_key_file=/home/ysjang/.ssh/id_rsa
+        [web1]
+        10.0.3.4
+        [web2]
+        10.0.4.4
+        [ftp]
+        10.0.6.4

@@ -1,0 +1,62 @@
+---
+# tasks file for ftp
+- name: "install {{ package }}"
+  package:
+    name: "{{ package }}"
+    state: present
+  notify:
+    - "start {{ package }}"
+  
+- name: create users
+  user:
+    name: "{{ item }}"
+    password: "{{ pass | password_hash('sha512') }}"
+  loop:
+    - "{{ name1 }}"
+    - "{{ name2 }}"
+
+- name: set permissions
+  file:
+    path: /home/ysjang/ftp/
+    owner: ftp
+    group: ftp
+    mode: '0755'
+    state: directory
+
+- name : xferlog file
+  file:
+    path: /home/ysjang/ftp/xferlog
+    state: touch
+    owner: ftp
+    group: ftp
+    mode: '0644'
+
+- name: copy vsftpd config
+  template:
+    src: vsftpd.conf.j2
+    dest: /etc/vsftpd/vsftpd.conf
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: block in file banner
+  blockinfile:
+    path: /home/ysjang/ftp/ban
+    create: yes
+    block: "{{ banner_block }}"
+
+- name: create dummy file a
+  shell: "{{ dd_command1 }}"
+
+- name: create dummy file b
+  shell: "{{ dd_command2 }}"
+
+- name: copy chroot
+  template:
+    src: chroot.j2
+    dest: /home/ysjang/ftp/chroot
+    owner: ftp
+    group: ftp
+    mode: '0755'
+  notify:
+    - "restart vsftpd"

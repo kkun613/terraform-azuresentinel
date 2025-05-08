@@ -1,0 +1,68 @@
+---
+# tasks file for apache
+- name: install apache
+  dnf:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - httpd
+    - tar
+    - wget
+    - php-curl
+    - php-mysqlnd
+    - php-gd
+    - php-cli
+    - php
+
+- name: download wordpress
+  get_url:
+    url: https://ko.wordpress.org/wordpress-6.8-ko_KR.tar.gz
+    dest: '/home/ysjang/'
+
+- name: extract wordpress
+  unarchive:
+    src: '/home/ysjang/wordpress-6.8-ko_KR.tar.gz'
+    dest: '/home/ysjang/'
+    remote_src: yes
+    owner: apache
+    group: apache
+    mode: 0755
+
+- name: copy wordpress to /var/www/html
+  copy:
+    src: /home/ysjang/wordpress/
+    dest: /var/www/html/
+    remote_src: yes
+    owner: apache
+    group: apache
+    mode: 0755
+    force: yes
+
+- name: copy wp-config-sample.php
+  copy:
+    src: /var/www/html/wp-config-sample.php
+    dest: /var/www/html/wp-config.php
+    remote_src: yes
+    owner: apache
+    group: apache
+    mode: 0644
+    force: yes
+
+- name: change index.html index.php
+  replace:
+    path: /etc/httpd/conf/httpd.conf
+    regexp: 'DirectoryIndex index.html'
+    replace: 'DirectoryIndex index.php'
+
+- name: change wp-config.php
+  replace:
+    path: /var/www/html/wp-config.php
+    regexp: "{{ item.from }}"
+    replace: "{{ item.to }}"
+  loop:
+    - { from: 'database_name_here', to: "{{ db_name }}" }
+    - { from: 'username_here', to: "{{ username }}" }
+    - { from: 'password_here', to: "{{ password }}" }
+    - { from: 'localhost', to: "{{ localhost }}" }
+  notify:
+    - start httpd

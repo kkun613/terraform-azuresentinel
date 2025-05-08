@@ -1,0 +1,6 @@
+---
+# vars file for nginx
+db_name: "wordpress"
+username: "root"
+password: "It12345!"
+localhost: "192.168.126.11"

@@ -1,0 +1,6 @@
+---
+- name: install apache and wordpress on web1
+  hosts: web1
+  become: true
+  roles:
+    - apache

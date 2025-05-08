@@ -1,0 +1,13 @@
+---
+# handlers file for nginx
+- name: "start nginx"
+  systemd:
+    name: nginx
+    state: started
+    enabled: yes
+
+- name: "start php-fpm"
+  systemd:
+    name: php-fpm
+    state: started
+    enabled: yes

@@ -1,0 +1,218 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "logicAppName": {
+      "type": "string"
+    },
+    "vmResourceId": {
+      "type": "string"
+    },
+    "nsgResourceId": {
+      "type": "string"
+    },
+    "storageAccountName": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2016-06-01",
+      "name": "[parameters('logicAppName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            },
+            "storageAccountName": {
+              "defaultValue": "[parameters('storageAccountName')]",
+              "type": "String"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "referenceName": "azuresentinel"
+                  }
+                },
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "SendEmail": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['smtp']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/SendEmailV3",
+                "body": {
+                  "from": "jys613kr@gmail.com",
+                  "to": "jys613kr@gmail.com",
+                  "subject": "[긴급][정보보호 경고] 병원 내부정보 외부 유출 확인 안내",
+                  "body": "안녕하세요, [다나아병원] 정보보호팀입니다.<br><br>금일 보안 시스템을 통해 병원 내부 전자의무기록(EMR) 및 환자 관련 민감 정보 일부가 외부로 유출된 정황이 확인되었습니다.<br><br>📌 발생 시간: <strong>@{triggerBody()?['object']?['properties']?['createdTimeUtc']}</strong><br>📌 Incident 이름: @{triggerBody()?['object']?['properties']?['title']}<br>📌 심각도: @{triggerBody()?['object']?['properties']?['severity']}",
+                  "isHtml": true
+                }
+              }
+            },
+            "BlockNSG": {
+              "type": "Http",
+              "inputs": {
+                "method": "PUT",
+                "uri": "[concat('https://management.azure.com', parameters('nsgResourceId'), '/securityRules/deny-ftp?api-version=2022-01-01')]",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "properties": {
+                    "protocol": "Tcp",
+                    "sourcePortRange": "*",
+                    "destinationPortRanges": [
+                      "21",
+                      "65000-65100"
+                    ],
+                    "sourceAddressPrefix": "*",
+                    "destinationAddressPrefix": "*",
+                    "access": "Deny",
+                    "priority": 4096,
+                    "direction": "Outbound"
+                  }
+                },
+                "authentication": {
+                  "type": "ManagedServiceIdentity",
+                  "resource": "https://management.azure.com/"
+                }
+              },
+              "runAfter": {
+                "SendEmail": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "BlockNSGInbound": {
+              "type": "Http",
+              "inputs": {
+                "method": "PUT",
+                "uri": "[concat('https://management.azure.com', parameters('nsgResourceId'), '/securityRules/deny-ftp-inbound?api-version=2022-01-01')]",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "properties": {
+                    "protocol": "Tcp",
+                    "sourcePortRange": "*",
+                    "destinationPortRanges": [
+                      "65000-65100"
+                    ],
+                    "sourceAddressPrefix": "*",
+                    "destinationAddressPrefix": "*",
+                    "access": "Deny",
+                    "priority": 996,
+                    "direction": "Inbound"
+                  }
+                },
+                "authentication": {
+                  "type": "ManagedServiceIdentity",
+                  "resource": "https://management.azure.com/"
+                }
+              },
+              "runAfter": {
+                "BlockNSG": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "UploadBlob": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azureblob']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/files",
+                "queries": {
+                  "folderPath": "/ysjang-container",
+                  "name": "incident-@{utcNow()}.json",
+                  "queryParametersSingleEncoded": true
+                },
+                "headers": {
+                  "ReadFileMetadataFromServer": true
+                },
+                "body": "@{json(string(triggerBody()?['object']))}"
+              },
+              "runAfter": {
+                "BlockNSGInbound": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "TagVM": {
+              "type": "Http",
+              "inputs": {
+                "method": "PATCH",
+                "uri": "[concat('https://management.azure.com', parameters('vmResourceId'), '?api-version=2023-03-01')]",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "tags": {
+                    "status": "compromised"
+                  }
+                },
+                "authentication": {
+                  "type": "ManagedServiceIdentity",
+                  "resource": "https://management.azure.com/"
+                }
+              },
+              "runAfter": {
+                "UploadBlob": [
+                  "Succeeded"
+                ]
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "smtp": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', 'smtp-con')]",
+                "connectionName": "smtp",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/smtp')]"
+              },
+              "azureblob": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', 'azureblob-con')]",
+                "connectionName": "azureblob",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureblob')]"
+              },
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', 'azuresentinel-con')]",
+                "connectionName": "azuresentinel",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

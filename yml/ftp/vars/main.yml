@@ -1,0 +1,14 @@
+---
+# vars file for ftp
+package: vsftpd
+webport: 21/tcp
+name1: a
+name2: b
+pass: "1234"
+banner_block: |
+  ###############################
+  Warning
+  ###############################
+
+dd_command1: "dd if=/dev/zero of=/home/a/a.txt bs=10M count=1"
+dd_command2: "dd if=/dev/zero of=/home/b/b.txt bs=10M count=1"
